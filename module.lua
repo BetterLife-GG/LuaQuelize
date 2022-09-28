@@ -1,8 +1,6 @@
 LuaQuelize = {}
 
-function LuaQuelize:Model(name, options)
-    return LQModel:new(name, options)
-end
+LuaQuelize.Model = LQModel
 
 exports('LuaQuelize', function()
     return LuaQuelize

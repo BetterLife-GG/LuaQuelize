@@ -1,7 +1,6 @@
-oxmysql = exports['oxmysql']
+SQL = exports['oxmysql']
+---@type tablelibext
+tableext = exports['bl-base'].table() -- BetterLife Dependency
+Debug = exports['bl-base'].Debug() -- BetterLife Dependency
 
-Citizen.CreateThread(function()
-    local phones = LuaQuelize:Model('todos', {
-        ads = 'todos',
-    })
-end)
+LQInternal = {}
