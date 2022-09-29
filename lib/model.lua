@@ -22,6 +22,7 @@ function LQModel.new(modelName, attributes, options)
         end
     })
 
+    self.__ready = false
     self.modelName = modelName
     self.attributes = attributes
     self.options = options
@@ -35,63 +36,51 @@ function LQModel.new(modelName, attributes, options)
     return self
 end
 
+function LQModel:__getDoesTableExist()
+    -- return oxmysql:query('SHOW CREATE TABLE ' .. self.modelName, {}, nil, nil, false, false)
+    return oxmysql:query('SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?', { self.modelName }, nil, nil, false, false)
+end
+
 function LQModel:Sync()
-    local function checkTable()
-        return SQL:query('SHOW CREATE TABLE test')
-    end
+    -- local exist = pcall(, function()
+    -- end)
+    local exist = LQModel:__getDoesTableExist()
 
-    local test = pcall(function()
-        print('pepega')
-        checkTable()
-    end, function()
-        print('wont work')
-    end)
-
-    print(test)
-
-    if 1 == 1 then return end
-
-    if pcall(checkTable()) then
+    if exist then
 
     else
+        local attributes = tableext.map(self.attributes, function(attribute, key)
+            local row = LQInternal.joinSQLFragments({
+                key,
+                attribute.type:toSql(),
+                attribute.primaryKey and 'PRIMARY KEY' or nil,
+                attribute.autoIncrement and 'AUTO_INCREMENT' or nil,
+                attribute.unique and 'UNIQUE' or nil,
+                attribute.allowNull and 'NULL' or 'NOT NULL',
+                attribute.default and 'DEFAULT ' .. attribute.default or nil,
+                attribute.references and 'REFERENCES ' .. attribute.references or nil
+            })
+
+            return row
+        end)
+
+        print('attr', Debug.DumpTable(attributes))
+
+        local attributesSQL = LQInternal.joinSQLFragments(tableext.entries(attributes), ', ')
+
+        print(attributesSQL)
+
         local tableSQL = LQInternal.joinSQLFragments({
-            'CREATE TABLE IF NOT EXISTS',
-            self.modelName,
+            'CREATE TABLE @modelName',
             '(',
-            LQInternal.joinSQLFragments(tableext.map(self.attributes, function(value, key)
-                local dataType = value.type
-                local allowNull = value.allowNull
-                local primaryKey = value.primaryKey
-                local autoIncrement = value.autoIncrement
-                local unique = value.unique
-                local defaultValue = value.defaultValue
-
-                local dataTypeString = dataType.toSql()
-
-                if (primaryKey) then
-                    dataTypeString = dataTypeString .. ' PRIMARY KEY'
-                end
-
-                if (autoIncrement) then
-                    dataTypeString = dataTypeString .. ' AUTO_INCREMENT'
-                end
-
-                if (unique) then
-                    dataTypeString = dataTypeString .. ' UNIQUE'
-                end
-
-                if (allowNull == false) then
-                    dataTypeString = dataTypeString .. ' NOT NULL'
-                end
-
-                if (defaultValue ~= nil) then
-                    dataTypeString = dataTypeString .. ' DEFAULT ' .. dataType.stringify(defaultValue)
-                end
-
-                return key .. ' ' .. dataTypeString
-            end), ', '),
+            attributesSQL,
             ')',
         })
+
+        oxmysql:query(tableSQL, {
+            modelName = self.modelName
+        }, nil, nil, false, false)
+
     end
 end
 

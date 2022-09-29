@@ -7,7 +7,7 @@ function doesNotWantTrailingSpace(str)
     return string.sub(str, -1) == '('
 end
 
-local function singleSpaceJoinHelper(parts)
+local function singleSpaceJoinHelper(parts, sepearator)
     local result = ''
     local skipNextLeadingSpace = true
 
@@ -20,13 +20,17 @@ local function singleSpaceJoinHelper(parts)
             result = result .. ' ' .. part
         end
 
+        if sepearator and i < #parts then
+            result = result .. sepearator
+        end
+
         skipNextLeadingSpace = doesNotWantTrailingSpace(part)
     end
 
     return result
 end
 
-function LQInternal.joinSQLFragments(array)
+function LQInternal.joinSQLFragments(array, separator)
     if (#array) == 0 then return '' end
 
     local truthyArray = tableext.filter(array, function(x)
@@ -55,7 +59,7 @@ function LQInternal.joinSQLFragments(array)
         return fragment ~= ''
     end)
 
-    return singleSpaceJoinHelper(nonEmptyStringArray)
+    return singleSpaceJoinHelper(nonEmptyStringArray, separator)
 end
 
 ---comment

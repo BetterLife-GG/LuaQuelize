@@ -1,4 +1,4 @@
-SQL = exports['oxmysql']
+oxmysql = exports.oxmysql
 ---@type tablelibext
 tableext = exports['bl-base'].table() -- BetterLife Dependency
 Debug = exports['bl-base'].Debug() -- BetterLife Dependency
