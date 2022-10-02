@@ -42,44 +42,42 @@ function LQModel:__getDoesTableExist()
 end
 
 function LQModel:Sync()
-    -- local exist = pcall(, function()
-    -- end)
     local exist = LQModel:__getDoesTableExist()
 
     if exist then
 
     else
+        local primaryKey
+
         local attributes = tableext.map(self.attributes, function(attribute, key)
             local row = LQInternal.joinSQLFragments({
                 key,
-                attribute.type:toSql(),
-                attribute.primaryKey and 'PRIMARY KEY' or nil,
-                attribute.autoIncrement and 'AUTO_INCREMENT' or nil,
+                attribute.type.toSql(),
                 attribute.unique and 'UNIQUE' or nil,
                 attribute.allowNull and 'NULL' or 'NOT NULL',
                 attribute.default and 'DEFAULT ' .. attribute.default or nil,
-                attribute.references and 'REFERENCES ' .. attribute.references or nil
+                attribute.references and 'REFERENCES ' .. attribute.references or nil,
+                attribute.autoIncrement and 'AUTO_INCREMENT' or nil,
             })
+
+            if (attribute.primaryKey) then
+                primaryKey = key
+            end
 
             return row
         end)
 
-        print('attr', Debug.DumpTable(attributes))
-
         local attributesSQL = LQInternal.joinSQLFragments(tableext.entries(attributes), ', ')
 
-        print(attributesSQL)
-
         local tableSQL = LQInternal.joinSQLFragments({
-            'CREATE TABLE @modelName',
+            'CREATE TABLE ' .. self.modelName,
             '(',
             attributesSQL,
+            primaryKey and ', PRIMARY KEY (' .. primaryKey .. ')' or nil,
             ')',
         })
 
-        oxmysql:query(tableSQL, {
-            modelName = self.modelName
-        }, nil, nil, false, false)
+        oxmysql:query(tableSQL, { self.modelName }, nil, nil, false, false)
 
     end
 end

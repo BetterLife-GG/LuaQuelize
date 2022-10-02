@@ -4,25 +4,24 @@ LQDataTypes = {}
 --- @alias LQAbstractDataType { key: string, dialectTypes: strimg, toSql: fun(): string, stringify: fun(value: unknown, options?: table): strimg, toString: fun(options: table): string }
 
 
----@param dataType any
----@param length any
+---@param dataType string
+---@param length number?
 ---@class LQDataType
 local function LQDataType(dataType, length)
-    local sqlType = {
+    local self = {
         type = dataType,
         length = length
     }
 
-    function sqlType.toSql()
-        -- todo
-        return 'VARCHAR(255)'
+    self.toSql = function()
+        return self.type .. (self.length and '(' .. self.length .. ')' or '')
     end
 
-    return sqlType
+    return self
 end
 
 function LQDataTypes.STRING(length)
-    return LQDataType("STRING", length)
+    return LQDataType("VARCHAR", length)
 end
 
 function LQDataTypes.INT()
