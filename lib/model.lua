@@ -1,8 +1,19 @@
 ---@class LQModel
 LQModel = {
+    -- ABSTRACT VALUES
+    __ready = false,
+    modelName = '',
+    ---@type table<string, LQModelValue>
+    attributes = {},
+    ---@type LQModelOptions
+    options = {},
+    resource = {},
+    schema = '',
 }
 
----@alias LQModelOptions { schema: string }
+_LQModel = {}
+
+---@alias LQModelOptions { }
 ---@alias LQModelValue { type: LQDataType, unique?: boolean, allowNull?: boolean, primaryKey?: boolean, defult?: any, autoIncrement?: boolean, references?: string }
 
 ---@param modelName string
@@ -17,33 +28,80 @@ function LQModel.new(modelName, attributes, options, registrant)
 
     local self = self or {}
 
-    setmetatable(self, {
-        __index = LQModel,
-        __call = function(self, ...)
-            return self:new(...)
-        end
-    })
-
-    self.__ready = false
-    self.modelName = modelName
-    self.attributes = attributes
-    self.options = options
-    self.resource = registrant
-    self.schema = options.schema
-
     -- populate slef (cross resource does not support metatables)
     for k, v in pairs(LQModel) do
         self[k] = v
     end
 
+    self.LuaQuelize = LuaQuelize
+    self.__ready = false
+    self.modelName = modelName
+    self.attributes = attributes
+    self.options = options
+    self.resource = registrant
+    self.schema = self.LuaQuelize.config.schema
+
+    -- set metatable
+    setmetatable(self, {
+        __index = LQModel,
+    })
+
     return self
 end
 
+---@param attribute LQModelValue
+function _LQModel:__attrToSQL(attribute)
+    local template = ''
+
+    return template
+end
+
+---@param attrName string
+---@param attribute LQModelValue
+function LQModel:__alterTable(attrName, attribute)
+    local query = LQInternal.joinSQLFragments({
+        'ALTER TABLE',
+        '`' .. self.schema .. '`',
+        '`' .. self.modelName .. '`',
+        'ADD',
+        '`' .. attrName .. '`',
+        _LQModel:__attrToSQL(attribute),
+    })
+end
+
+---Runs only inside coroutine, otherwise it will crash, call inside Citizen.CreateThread
 function LQModel:Sync()
-    local exist = MySQL:query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\'', {}, nil, self.resource, true)
+    local exist = MySQL:query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\' AND TABLE_NAME = \'' .. self.modelName .. '\' AND TABLE_SCHEMA = \'' .. self.schema .. '\'')
 
     if exist then
+        -- check if table structure is the same
+        local columns = MySQL:query('SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'' .. self.modelName .. '\' AND TABLE_SCHEMA = \'' .. self.schema .. '\'')
+        local attributesLength = function()
+            local length = 0
+            for _ in pairs(self.attributes) do
+                length = length + 1
+            end
+            return length
+        end
 
+        if (#columns < attributesLength()) then
+            -- needs to add something
+
+            local columnsToAdd = {}
+            for key, attirbute in pairs(self.attributes) do
+                for _, column in pairs(columns) do
+                    if (column.COLUMN_NAME == key) then
+                        goto continue
+                    end
+                end
+
+                table.insert(columnsToAdd, key)
+                ::continue::
+            end
+
+        else
+            error('LuaQuelize error, found target table but it has different structure, recomended to adjust it manually.')
+        end
     else
         local primaryKey
 
@@ -75,7 +133,9 @@ function LQModel:Sync()
             ')',
         })
 
-        MySQL.query(tableSQL, { self.modelName }, nil, self.resource, false, false)
+        MySQL:query(tableSQL, nil, self.schema)
+
+        print('LQ: Table ' .. self.modelName .. ' created')
     end
 end
 
@@ -86,7 +146,10 @@ end
 function LQModel.Define(modelName, attributes, options)
     self = LQModel.new(modelName, attributes, options, GetInvokingResource())
 
-    LQModel.Sync(self)
+    -- thread is important cause it needs to be executed inside coroutine
+    Citizen.CreateThread(function()
+        self:Sync()
+    end)
 
     return self
 end

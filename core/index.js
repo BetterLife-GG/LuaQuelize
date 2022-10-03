@@ -116,7 +116,7 @@ const scheduleTick = async () => {
   // ScheduleResourceTick(resourceName);
 };
 
-const rawQuery = async (query) => {
+const rawQuery = async (query, _reserved, schema) => {
   await scheduleTick();
 
   return await new Promise(async (resolve, reject) => {
