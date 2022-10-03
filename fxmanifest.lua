@@ -7,6 +7,7 @@ author 'BetterLife.GG/maicek_'
 description 'LuaQuelize is a Lua ORM for FiveM.'
 
 server_scripts {
+    'core/index.js',
     'main.lua',
     'core/*.lua',
     'lib/model.lua',

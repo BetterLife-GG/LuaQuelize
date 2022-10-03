@@ -1,19 +1,21 @@
 ---@class LQModel
-LQModel = {}
+LQModel = {
+}
 
----@alias LQModelOptions { }
+---@alias LQModelOptions { schema: string }
 ---@alias LQModelValue { type: LQDataType, unique?: boolean, allowNull?: boolean, primaryKey?: boolean, defult?: any, autoIncrement?: boolean, references?: string }
 
 ---@param modelName string
 ---@param attributes table<string, LQModelValue>
 ---@param options LQModelOptions
 ---@return LQModel
-function LQModel.new(modelName, attributes, options)
+function LQModel.new(modelName, attributes, options, registrant)
+    registrant = registrant or GetInvokingResource()
     attributes = attributes or {}
     ---@type LQModelOptions
     options = options or {}
 
-    self = self or {}
+    local self = self or {}
 
     setmetatable(self, {
         __index = LQModel,
@@ -26,23 +28,19 @@ function LQModel.new(modelName, attributes, options)
     self.modelName = modelName
     self.attributes = attributes
     self.options = options
+    self.resource = registrant
+    self.schema = options.schema
 
     -- populate slef (cross resource does not support metatables)
     for k, v in pairs(LQModel) do
         self[k] = v
     end
 
-
     return self
 end
 
-function LQModel:__getDoesTableExist()
-    -- return oxmysql:query('SHOW CREATE TABLE ' .. self.modelName, {}, nil, nil, false, false)
-    return oxmysql:query('SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?', { self.modelName }, nil, nil, false, false)
-end
-
 function LQModel:Sync()
-    local exist = LQModel:__getDoesTableExist()
+    local exist = MySQL:query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\'', {}, nil, self.resource, true)
 
     if exist then
 
@@ -77,8 +75,7 @@ function LQModel:Sync()
             ')',
         })
 
-        oxmysql:query(tableSQL, { self.modelName }, nil, nil, false, false)
-
+        MySQL.query(tableSQL, { self.modelName }, nil, self.resource, false, false)
     end
 end
 
@@ -87,9 +84,9 @@ end
 ---@param options LQModelOptions
 ---@return LQModel
 function LQModel.Define(modelName, attributes, options)
-    self = LQModel.new(modelName, attributes, options)
+    self = LQModel.new(modelName, attributes, options, GetInvokingResource())
 
-    self:Sync()
+    LQModel.Sync(self)
 
     return self
 end
