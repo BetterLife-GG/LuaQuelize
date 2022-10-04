@@ -51,69 +51,94 @@ end
 
 ---@param attribute LQModelValue
 function _LQModel:__attrToSQL(attribute)
-    local template = ''
+    local template = LQInternal.joinSQLFragments({
+        attribute.type.toSql(),
+        attribute.unique and 'UNIQUE' or nil,
+        attribute.allowNull and 'NULL' or 'NOT NULL',
+        attribute.default and 'DEFAULT ' .. attribute.default or nil,
+        attribute.references and 'REFERENCES ' .. attribute.references or nil,
+        attribute.autoIncrement and 'AUTO_INCREMENT' or nil,
+    })
 
     return template
 end
 
 ---@param attrName string
 ---@param attribute LQModelValue
-function LQModel:__alterTable(attrName, attribute)
+function LQModel:__alterTable(attrName, attribute, after)
     local query = LQInternal.joinSQLFragments({
         'ALTER TABLE',
-        '`' .. self.schema .. '`',
-        '`' .. self.modelName .. '`',
+        '`' .. self.schema .. '`.`' .. self.modelName .. '`',
         'ADD',
         '`' .. attrName .. '`',
         _LQModel:__attrToSQL(attribute),
+        'AFTER `' .. after .. '`'
     })
+
+    print(query)
+    MySQL:query(query)
 end
 
 ---Runs only inside coroutine, otherwise it will crash, call inside Citizen.CreateThread
-function LQModel:Sync()
+---@param data { force?: boolean}
+function LQModel:Sync(data)
     local exist = MySQL:query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\' AND TABLE_NAME = \'' .. self.modelName .. '\' AND TABLE_SCHEMA = \'' .. self.schema .. '\'')
 
-    if exist then
+    if #exist == 1 then
         -- check if table structure is the same
         local columns = MySQL:query('SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = \'' .. self.modelName .. '\' AND TABLE_SCHEMA = \'' .. self.schema .. '\'')
-        local attributesLength = function()
-            local length = 0
-            for _ in pairs(self.attributes) do
-                length = length + 1
-            end
-            return length
+        local foundCorrectColumns = {}
+
+        -- todo removing columns
+        for k, v in pairs(columns) do
+            local existInSchema = self.attributes[v.COLUMN_NAME]
         end
 
-        if (#columns < attributesLength()) then
-            -- needs to add something
+        -- creating new columns
+        ---@type { attrName: string, insertAfter: string }[]
+        local columnsToAdd = {}
 
-            local columnsToAdd = {}
-            for key, attirbute in pairs(self.attributes) do
-                for _, column in pairs(columns) do
-                    if (column.COLUMN_NAME == key) then
-                        goto continue
-                    end
+
+        ---Returns name of attribute that should be added after
+        local function getAttrBefore(attr)
+            local attrBefore = nil
+            for k, v in pairs(self.attributes) do
+                if v == attr then
+                    return attrBefore
                 end
+                attrBefore = k
+            end
+            return attrBefore
+        end
 
-                table.insert(columnsToAdd, key)
-                ::continue::
+        for k, v in pairs(self.attributes) do
+            local found = false
+            for k2, v2 in pairs(columns) do
+                if v2.COLUMN_NAME == k then
+                    found = true
+                    break
+                end
             end
 
-        else
-            error('LuaQuelize error, found target table but it has different structure, recomended to adjust it manually.')
+            if not found then
+                table.insert(columnsToAdd, {
+                    attrName = k,
+                    insertAfter = getAttrBefore(v)
+                })
+            end
         end
+
+        for k, v in pairs(columnsToAdd) do
+            self:__alterTable(v.attrName, self.attributes[v.attrName], v.insertAfter)
+        end
+
     else
         local primaryKey
 
         local attributes = tableext.map(self.attributes, function(attribute, key)
             local row = LQInternal.joinSQLFragments({
                 key,
-                attribute.type.toSql(),
-                attribute.unique and 'UNIQUE' or nil,
-                attribute.allowNull and 'NULL' or 'NOT NULL',
-                attribute.default and 'DEFAULT ' .. attribute.default or nil,
-                attribute.references and 'REFERENCES ' .. attribute.references or nil,
-                attribute.autoIncrement and 'AUTO_INCREMENT' or nil,
+                LQModel:__attrToSQL(attribute)
             })
 
             if (attribute.primaryKey) then
@@ -126,7 +151,7 @@ function LQModel:Sync()
         local attributesSQL = LQInternal.joinSQLFragments(tableext.entries(attributes), ', ')
 
         local tableSQL = LQInternal.joinSQLFragments({
-            'CREATE TABLE ' .. self.modelName,
+            'CREATE TABLE ' .. self.schema .. '.' .. self.modelName,
             '(',
             attributesSQL,
             primaryKey and ', PRIMARY KEY (' .. primaryKey .. ')' or nil,
