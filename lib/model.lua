@@ -20,7 +20,7 @@ _LQModel = {}
 ---@param attributes LQModelValue[]
 ---@param options LQModelOptions
 ---@return LQModel
-function LQModel.new(modelName, attributes, options, registrant)
+function LQModel.__newModel(modelName, attributes, options, registrant)
     registrant = registrant or GetInvokingResource()
     attributes = attributes or {}
     ---@type LQModelOptions
@@ -196,7 +196,7 @@ end
 ---@param options LQModelOptions
 ---@return LQModel
 function LQModel.Define(modelName, attributes, options)
-    self = LQModel.new(modelName, attributes, options, GetInvokingResource())
+    self = LQModel.__newModel(modelName, attributes, options, GetInvokingResource())
 
     -- thread is important cause it needs to be executed inside coroutine
     Citizen.CreateThread(function()
@@ -208,4 +208,9 @@ end
 
 function LQModel:getAttirbutes()
     return self.attributes
+end
+
+-- Value management
+function LQModel:create(values)
+    -- create object
 end
