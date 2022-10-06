@@ -13,11 +13,11 @@ LQModel = {
 
 _LQModel = {}
 
----@alias LQModelOptions { }
----@alias LQModelValue { type: LQDataType, unique?: boolean, allowNull?: boolean, primaryKey?: boolean, defult?: any, autoIncrement?: boolean, references?: string }
+---@alias LQModelOptions { force?: boolean }
+---@alias LQModelValue { name: string, type: LQDataType, unique?: boolean, allowNull?: boolean, primaryKey?: boolean, defult?: any, autoIncrement?: boolean, references?: string }
 
 ---@param modelName string
----@param attributes table<string, LQModelValue>
+---@param attributes LQModelValue[]
 ---@param options LQModelOptions
 ---@return LQModel
 function LQModel.new(modelName, attributes, options, registrant)
@@ -75,13 +75,24 @@ function LQModel:__alterTable(attrName, attribute, after)
         'AFTER `' .. after .. '`'
     })
 
-    print(query)
+    MySQL:query(query)
+end
+
+function LQModel:__removeColumn(attrName)
+    local query = LQInternal.joinSQLFragments({
+        'ALTER TABLE',
+        '`' .. self.schema .. '`.`' .. self.modelName .. '`',
+        'DROP COLUMN',
+        '`' .. attrName .. '`'
+    })
+
     MySQL:query(query)
 end
 
 ---Runs only inside coroutine, otherwise it will crash, call inside Citizen.CreateThread
 ---@param data { force?: boolean}
 function LQModel:Sync(data)
+    data = data or {}
     local exist = MySQL:query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = \'BASE TABLE\' AND TABLE_NAME = \'' .. self.modelName .. '\' AND TABLE_SCHEMA = \'' .. self.schema .. '\'')
 
     if #exist == 1 then
@@ -90,59 +101,75 @@ function LQModel:Sync(data)
         local foundCorrectColumns = {}
 
         -- todo removing columns
+        local removedInfo = false
+
         for k, v in pairs(columns) do
-            local existInSchema = self.attributes[v.COLUMN_NAME]
+            local existInSchema = tableext.find(self.attributes, function(attr)
+                return attr.name == v.COLUMN_NAME
+            end)
+
+            if existInSchema then
+                foundCorrectColumns[v.COLUMN_NAME] = true
+            else
+                print('Column ' .. v.COLUMN_NAME .. ' does not exist in schema, but exists in database')
+                removedInfo = not data.force
+
+                if (data.force) then
+                    print('Force removing column ' .. v.COLUMN_NAME)
+                    self:__removeColumn(v.COLUMN_NAME)
+                end
+            end
+        end
+
+        if removedInfo then
+            print('Recommended to remove columns manually or (not recommended) :Sync({ force: true })')
         end
 
         -- creating new columns
         ---@type { attrName: string, insertAfter: string }[]
         local columnsToAdd = {}
 
-
         ---Returns name of attribute that should be added after
         local function getAttrBefore(attr)
-            local attrBefore = nil
+            local attrBefore = self.attributes[1].name
+
             for k, v in pairs(self.attributes) do
-                if v == attr then
-                    return attrBefore
+                if v.name == attr.name then
+                    break
                 end
-                attrBefore = k
+
+                attrBefore = v.name
             end
+
             return attrBefore
         end
 
         for k, v in pairs(self.attributes) do
-            local found = false
-            for k2, v2 in pairs(columns) do
-                if v2.COLUMN_NAME == k then
-                    found = true
-                    break
-                end
-            end
-
-            if not found then
+            if not foundCorrectColumns[v.name] then
+                print('Column ' .. v.name .. ' does not exist in database, but exists in schema')
                 table.insert(columnsToAdd, {
-                    attrName = k,
+                    name = v.name,
+                    index = k,
                     insertAfter = getAttrBefore(v)
                 })
             end
         end
 
         for k, v in pairs(columnsToAdd) do
-            self:__alterTable(v.attrName, self.attributes[v.attrName], v.insertAfter)
+            print('Adding column ' .. v.name .. ' after ' .. v.insertAfter)
+            self:__alterTable(v.name, self.attributes[v.index], v.insertAfter)
         end
-
     else
         local primaryKey
 
         local attributes = tableext.map(self.attributes, function(attribute, key)
             local row = LQInternal.joinSQLFragments({
-                key,
-                LQModel:__attrToSQL(attribute)
+                attribute.name,
+                _LQModel:__attrToSQL(attribute)
             })
 
             if (attribute.primaryKey) then
-                primaryKey = key
+                primaryKey = attribute.name
             end
 
             return row
@@ -173,7 +200,7 @@ function LQModel.Define(modelName, attributes, options)
 
     -- thread is important cause it needs to be executed inside coroutine
     Citizen.CreateThread(function()
-        self:Sync()
+        self:Sync(options)
     end)
 
     return self
