@@ -9,6 +9,8 @@ LQModel = {
     options = {},
     resource = {},
     schema = '',
+    ---@type nil | string
+    primaryKey = nil,
 }
 
 _LQModel = {}
@@ -40,6 +42,7 @@ function LQModel.__newModel(modelName, attributes, options, registrant)
     self.options = options
     self.resource = registrant
     self.schema = self.LuaQuelize.config.schema
+    self.primaryKey = nil
 
     -- set metatable
     setmetatable(self, {
@@ -210,7 +213,77 @@ function LQModel:getAttirbutes()
     return self.attributes
 end
 
+function LQModel:findByPk(pk)
+    local data = MySQL:query(LQInternal.joinSQLFragments({
+        'SELECT * FROM',
+        '`' .. self.schema .. '`.`' .. self.modelName .. '`',
+        'WHERE',
+        '`' .. self.primaryKey .. '` = ' .. pk .. '',
+        'LIMIT 1'
+    }))
+
+    if not data then return nil end
+
+    return LQRecord.__createInstance(data, {
+        isNew = false,
+    })
+end
+
+---@param queryParams table<string, any>
+function LQModel:find(queryParams)
+    local data = MySQL:query(LQInternal.joinSQLFragments({
+        'SELECT * FROM',
+        '`' .. self.schema .. '`.`' .. self.modelName .. '`',
+        'WHERE',
+        LQInternal.joinSQLFragments(tableext.map(function(value, key)
+            return '' .. key .. ' = ' .. value .. ''
+        end), ' AND '),
+        'LIMIT 1'
+    }))
+
+    if not data then return nil end
+
+    return LQRecord.__createInstance(data[1], {
+        isNew = false,
+    })
+end
+
+---@param queryParams table<string, any>
+function LQModel:findAll(queryParams)
+    local data = MySQL:query(LQInternal.joinSQLFragments({
+        'SELECT * FROM',
+        '`' .. self.schema .. '`.`' .. self.modelName .. '`',
+        'WHERE',
+        LQInternal.joinSQLFragments(tableext.map(function(value, key)
+            return '' .. key .. ' = ' .. value .. ''
+        end), ' AND '),
+    }))
+
+    return tableext.map(data, function(value, key)
+        return LQRecord.__createInstance(value, {
+            isNew = false,
+        })
+    end)
+end
+
 -- Value management
 function LQModel:create(values)
     -- create object
+    local record = LQRecord.__createInstance(values, {
+        isNew = true,
+    })
+
+    return record
+end
+
+function LQModel:Build(values)
+    -- create object
+    local record = LQRecord.__createInstance(values, {
+        isNew = true
+    })
+
+    -- do save
+    record:save()
+
+    return record
 end
