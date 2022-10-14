@@ -4,17 +4,22 @@ LuaQuelize is an Object-relational mapper for FiveM (inspired by Sequelize).
 
 ---
 
-This project is already in development state, not ready for production yet. If you want to contribute, please contact me.
+This project is already in early beta state, not ready for production wide yet. If you want to contribute, please contact me.
 
 Maintainer: maicek\_ @ BetterLife.GG
+
+## Current limitations
+
+- Force sync allows to create only one column at time, needs to rework alter table logic.
+- Every table needs to have primary key, even if it's not used. For now all interactions with MySQL are using WHERE {primaryKey} = {value} to identify records.
+- Not all data types are supported yet, i personally don't need them for this state of project, will be added later.
 
 ## Features
 
 - [x] OOP (Object-oriented programming)
 - [x] MySQL support - only (maybe only for now, idk)
 - [x] Models
-- [ ] Associations (not yet)
-- [ ] Migrations (not yet)
+- [ ] Native associations (not yet)
 - [ ] Transactions (not yet)
 - [ ] Hooks (not yet)
 - [ ] Validations (not yet)

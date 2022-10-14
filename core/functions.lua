@@ -69,12 +69,9 @@ function LQInternal.merge(...)
     local args = table.pack(...)
     local result = {}
 
-    print(Debug.DumpTable(args))
-
     for _, obj in pairs(args) do
         if (type(_) == 'number') then
             for key, value in pairs(obj) do
-                print(key, value)
                 if (value ~= nil) then
                     if (not result[key]) then
                         result[key] = value
@@ -91,4 +88,25 @@ function LQInternal.merge(...)
     end
 
     return result
+end
+
+function LQInternal.mergeDataValues(dataValues, newDataValues)
+    for k, v in pairs(newDataValues) do
+        dataValues[k] = v
+    end
+
+    return dataValues
+end
+
+function LQInternal.objToArr(obj)
+    local arr = {}
+
+    for k, v in pairs(obj) do
+        table.insert(arr, {
+            key = k,
+            value = v
+        })
+    end
+
+    return arr
 end

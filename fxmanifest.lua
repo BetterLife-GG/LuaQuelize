@@ -13,5 +13,6 @@ server_scripts {
     'lib/model.lua',
     'lib/datatypes.lua',
     'lib/luaquelize.lua',
+    'lib/record.lua',
     'module.lua',
 }

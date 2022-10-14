@@ -92,6 +92,10 @@ function LQModel:__removeColumn(attrName)
     MySQL:query(query)
 end
 
+function LQModel:__getPK()
+    return self.primaryKey
+end
+
 ---Runs only inside coroutine, otherwise it will crash, call inside Citizen.CreateThread
 ---@param data { force?: boolean}
 function LQModel:Sync(data)
@@ -148,6 +152,9 @@ function LQModel:Sync(data)
         end
 
         for k, v in pairs(self.attributes) do
+            if (v.primaryKey) then
+                self.primaryKey = v.name
+            end
             if not foundCorrectColumns[v.name] then
                 print('Column ' .. v.name .. ' does not exist in database, but exists in schema')
                 table.insert(columnsToAdd, {
@@ -179,9 +186,8 @@ function LQModel:Sync(data)
         end)
 
         local attributesSQL = LQInternal.joinSQLFragments(tableext.entries(attributes), ', ')
-
         local tableSQL = LQInternal.joinSQLFragments({
-            'CREATE TABLE ' .. self.schema .. '.' .. self.modelName,
+            'CREATE TABLE `' .. self.schema .. '`.`' .. self.modelName .. '`',
             '(',
             attributesSQL,
             primaryKey and ', PRIMARY KEY (' .. primaryKey .. ')' or nil,
@@ -200,6 +206,15 @@ end
 ---@return LQModel
 function LQModel.Define(modelName, attributes, options)
     self = LQModel.__newModel(modelName, attributes, options, GetInvokingResource())
+
+    -- pk
+    local pk = tableext.find(attributes, function(attr)
+        return attr.primaryKey == true
+    end)
+
+    if (pk) then
+        self.primaryKey = pk.name
+    end
 
     -- thread is important cause it needs to be executed inside coroutine
     Citizen.CreateThread(function()
@@ -226,26 +241,32 @@ function LQModel:findByPk(pk)
 
     return LQRecord.__createInstance(data, {
         isNew = false,
-    })
+    }, self)
 end
 
----@param queryParams table<string, any>
+---@param queryParams { where: table<string, any> }
 function LQModel:find(queryParams)
-    local data = MySQL:query(LQInternal.joinSQLFragments({
+    assert(queryParams.where, 'LQ: Missing where parameter')
+
+    local query = LQInternal.joinSQLFragments({
         'SELECT * FROM',
         '`' .. self.schema .. '`.`' .. self.modelName .. '`',
         'WHERE',
-        LQInternal.joinSQLFragments(tableext.map(function(value, key)
-            return '' .. key .. ' = ' .. value .. ''
+        LQInternal.joinSQLFragments(tableext.map(LQInternal.objToArr(queryParams.where), function(v)
+            return '' .. v.key .. ' = ' .. v.value .. ''
         end), ' AND '),
         'LIMIT 1'
-    }))
-
-    if not data then return nil end
-
-    return LQRecord.__createInstance(data[1], {
-        isNew = false,
     })
+
+    local data = MySQL:query(query)
+
+    if not next(data) then return nil end
+
+    local instance = LQRecord.__createInstance(data[1], {
+        isNew = false,
+    }, self)
+
+    return instance
 end
 
 ---@param queryParams table<string, any>
@@ -262,7 +283,7 @@ function LQModel:findAll(queryParams)
     return tableext.map(data, function(value, key)
         return LQRecord.__createInstance(value, {
             isNew = false,
-        })
+        }, self)
     end)
 end
 
@@ -271,16 +292,16 @@ function LQModel:create(values)
     -- create object
     local record = LQRecord.__createInstance(values, {
         isNew = true,
-    })
+    }, self)
 
     return record
 end
 
-function LQModel:Build(values)
+function LQModel:build(values)
     -- create object
     local record = LQRecord.__createInstance(values, {
         isNew = true
-    })
+    }, self)
 
     -- do save
     record:save()

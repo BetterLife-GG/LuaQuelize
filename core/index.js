@@ -70,7 +70,6 @@ const connectionOptions = (() => {
     if (typeof value === 'string') {
       try {
         options[key] = JSON.parse(value);
-        console.log(key, options[key]);
       } catch {}
     }
   }
@@ -104,7 +103,6 @@ const scheduleTick = async () => {
   if (!serverReady) {
     await new Promise((resolve) => {
       (function wait() {
-        console.log(serverReady);
         if (serverReady) {
           return resolve();
         }
@@ -121,7 +119,7 @@ const rawQuery = async (query, _reserved, schema) => {
 
   return await new Promise(async (resolve, reject) => {
     pool.query(query, (err, results) => {
-      if (err) return reject(err);
+      if (err) return console.error(err);
       resolve(results);
     });
   });
